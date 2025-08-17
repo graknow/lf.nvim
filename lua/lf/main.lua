@@ -151,6 +151,12 @@ function Lf:__open_in(path)
         built = fs.dirname(built)
     end
 
+    -- Go up directories until a valid one is found
+    while type(stat) == "nil" do
+        built = fs.dirname(built)
+        stat = uv.fs_stat(built)
+    end
+
     self.term.dir = built
     self.curfile = fn.expand("%:p")
 
@@ -168,6 +174,7 @@ function Lf:__set_cmd_wrapper()
     local open_on = self.term.dir
     if
         self.cfg.focus_on_open
+        and uv.fs_stat(self.curfile)
         and fs.dirname(self.curfile) == self.term.dir
     then
         open_on = self.curfile
@@ -215,7 +222,7 @@ function Lf:__on_open(term)
                 "t",
                 "<Esc>",
                 "<Cmd>q<CR>",
-                {buffer = self.bufnr, desc = "Exit Lf"}
+                { buffer = self.bufnr, desc = "Exit Lf" }
             )
         end
 
@@ -227,8 +234,8 @@ function Lf:__on_open(term)
                 local res = utils.read_file(self.tmp_id)
                 self.id = tonumber(res)
 
-                fn.system({"lf", "-remote", ("send %d open"):format(self.id)})
-            end, {noremap = true, buffer = self.bufnr, desc = ("Lf %s"):format(mapping)})
+                fn.system({ "lf", "-remote", ("send %d open"):format(self.id) })
+            end, { noremap = true, buffer = self.bufnr, desc = ("Lf %s"):format(mapping) })
         end
 
         if self.cfg.layout_mapping then
@@ -279,8 +286,8 @@ function Lf:__callback(term)
                 cmd(("%s %s"):format(self.action, fesc))
                 local args = table.concat(self.arglist, " ")
                 if string.len(args) > 0 then
-                  cmd.argadd(args)
-                  cmd.argdedupe()
+                    cmd.argadd(args)
+                    cmd.argdedupe()
                 end
                 self:__set_argv()
             end
@@ -298,8 +305,8 @@ end
 function Lf:__set_argv()
     local args = {}
     for _, arg in ipairs(fn.argv()) do
-        if api.nvim_buf_is_loaded(fn.bufnr(arg)) then
-            table.insert(args, uv.fs_realpath(arg))
+        if uv.fs_stat(arg) and api.nvim_buf_is_loaded(fn.bufnr(arg)) then
+            table.insert(args, uv.fs_realpath(arg) or "")
         end
     end
     self.arglist = args
